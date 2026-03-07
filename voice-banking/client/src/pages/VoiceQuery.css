@@ -1,0 +1,157 @@
+.voice-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: var(--space-xl);
+  min-height: calc(100vh - var(--nav-height));
+}
+
+/* Chips */
+.voice-chips {
+  width: 100%;
+  margin-bottom: var(--space-2xl);
+}
+
+.chips-label {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+  text-align: center;
+}
+
+.chips-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: center;
+}
+
+.chip-btn {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.chip-btn:hover {
+  border-color: var(--accent-yellow);
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+
+.chip-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mic Button */
+.mic-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.mic-button {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all var(--transition-base);
+  font-size: 48px;
+}
+
+.mic-button.idle {
+  background: linear-gradient(135deg, var(--accent-yellow), #d97706, #b45309);
+  color: var(--text-inverse);
+  box-shadow: 0 0 50px rgba(245, 158, 11, 0.3), 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.mic-button.idle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 70px rgba(245, 158, 11, 0.4), 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.mic-button.recording {
+  background: linear-gradient(135deg, var(--accent-blue), #2563eb, #1d4ed8);
+  color: white;
+  box-shadow: 0 0 50px rgba(59, 130, 246, 0.4), 0 8px 32px rgba(0, 0, 0, 0.3);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.mic-button.processing {
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+  color: white;
+  cursor: not-allowed;
+}
+
+.mic-label {
+  font-size: var(--font-sm);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Mic Ripples */
+.mic-ripple {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid rgba(59, 130, 246, 0.4);
+  animation: ripple 2s ease-out infinite;
+  pointer-events: none;
+}
+
+.mic-ripple.r2 { animation-delay: 0.5s; }
+.mic-ripple.r3 { animation-delay: 1s; }
+
+/* Transcript */
+.transcript-area {
+  width: 100%;
+  text-align: center;
+  margin-bottom: var(--space-lg);
+}
+
+.transcript-text {
+  font-size: var(--font-lg);
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Response Card */
+.response-card {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  margin-top: var(--space-md);
+}
+
+.response-text {
+  font-size: var(--font-md);
+  line-height: 1.7;
+  color: var(--text-primary);
+  margin-bottom: var(--space-lg);
+}
+
+.replay-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-sm);
+}
