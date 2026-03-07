@@ -1,0 +1,205 @@
+.dashboard-page {
+  padding-top: var(--space-xl);
+}
+
+.dashboard-greeting {
+  font-size: var(--font-2xl);
+  font-weight: 700;
+  margin-bottom: var(--space-xl);
+}
+
+/* Balance Cards */
+.balance-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.balance-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-lg) var(--space-xl);
+  border-radius: var(--radius-xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.balance-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.08;
+  border-radius: inherit;
+}
+
+.savings-card {
+  background: linear-gradient(135deg, #1a2035 0%, #0f172a 100%);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  box-shadow: 0 4px 24px rgba(245, 158, 11, 0.08);
+}
+
+.pension-card {
+  background: linear-gradient(135deg, #1a2035 0%, #0f172a 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 4px 24px rgba(59, 130, 246, 0.08);
+}
+
+.balance-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+.savings-card .balance-label { color: var(--accent-yellow); }
+.pension-card .balance-label { color: var(--accent-blue); }
+
+.balance-account {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+  font-family: monospace;
+}
+
+.balance-amount {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+/* Quick Actions */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+}
+
+.quick-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-sm);
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  border: 1px solid var(--border-color);
+  min-height: 48px;
+}
+
+.quick-action-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.quick-action-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quick-action-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Recent Activity */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-md);
+}
+
+.section-header h2 {
+  font-size: var(--font-lg);
+  font-weight: 600;
+}
+
+.transaction-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.transaction-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  transition: background var(--transition-fast);
+}
+
+.transaction-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.tx-indicator {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.tx-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tx-merchant {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tx-category {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+.tx-amount-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.tx-amount {
+  font-size: var(--font-sm);
+  font-weight: 700;
+}
+
+.tx-amount.credit { color: var(--accent-green); }
+.tx-amount.debit { color: var(--accent-red); }
+
+.tx-date {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}

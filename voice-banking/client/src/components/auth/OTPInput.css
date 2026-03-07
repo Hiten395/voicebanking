@@ -1,0 +1,38 @@
+.otp-container {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.otp-box {
+  width: 48px;
+  height: 56px;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-family: var(--font-family);
+  background: var(--bg-input);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+  caret-color: var(--accent-yellow);
+}
+
+.otp-box:focus {
+  outline: none;
+  border-color: var(--accent-yellow);
+  box-shadow: 0 0 0 3px var(--accent-yellow-glow);
+}
+
+.otp-box:disabled {
+  opacity: 0.5;
+}
+
+@media (max-width: 380px) {
+  .otp-box {
+    width: 42px;
+    height: 50px;
+    font-size: 1.25rem;
+  }
+}

@@ -12,4 +12,14 @@ const generateAccountNumber = async (prefix) => {
   return number;
 };
 
-module.exports = { generateAccountNumber };
+const generateUserAccounts = async () => {
+  const savingsNumber = await generateAccountNumber('SAV');
+  const pensionNumber = await generateAccountNumber('PEN');
+
+  return [
+    { type: 'savings', number: savingsNumber, balance: 10000 },
+    { type: 'pension', number: pensionNumber, balance: 25000 }
+  ];
+};
+
+module.exports = { generateAccountNumber, generateUserAccounts };

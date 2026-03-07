@@ -4,35 +4,43 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const OTP = require('../models/OTP');
 const { sendOTP } = require('../services/otpService');
-const { generateAccountNumber } = require('../services/accountService');
-const { generateEmbedding, cosineSimilarity } = require('../services/voiceService');
+const { generateUserAccounts } = require('../services/accountService');
+const { cosineSimilarity } = require('../services/voiceService');
+const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Generate tokens
-const generateAccessToken = (user) => {
-  return jwt.sign({ id: user._id, phone: user.phone }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' });
-};
+// ─── Token Helpers ────────────────────────────────────────────
+const generateAccessToken = (user) =>
+  jwt.sign({ id: user._id, phone: user.phone }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' });
 
-const generateRefreshToken = (user) => {
-  return jwt.sign({ id: user._id, phone: user.phone }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '7d' });
-};
+const generateRefreshToken = (user) =>
+  jwt.sign({ id: user._id, phone: user.phone }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '7d' });
 
 const setRefreshCookie = (res, token) => {
   res.cookie('refreshToken', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 };
 
-// POST /api/auth/send-otp
+const issueTokens = async (user, res) => {
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+  user.refreshToken = refreshToken;
+  await user.save();
+  setRefreshCookie(res, refreshToken);
+  return accessToken;
+};
+
+// ─── POST /api/auth/send-otp ──────────────────────────────────
 router.post('/send-otp', async (req, res) => {
   try {
     const { phone } = req.body;
     if (!phone || !/^[0-9]{10}$/.test(phone)) {
-      return res.status(400).json({ message: 'Valid 10-digit phone number required' });
+      return res.status(400).json({ success: false, error: 'Valid 10-digit phone number required' });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -42,152 +50,192 @@ router.post('/send-otp', async (req, res) => {
     await OTP.create({ phone, otp: hashedOTP });
     await sendOTP(phone, otp);
 
-    res.json({ message: 'OTP sent successfully' });
+    res.json({ success: true, message: 'OTP sent successfully' });
   } catch (error) {
     console.error('Send OTP error:', error);
-    res.status(500).json({ message: 'Failed to send OTP' });
+    res.status(500).json({ success: false, error: 'Failed to send OTP' });
   }
 });
 
-// POST /api/auth/verify-otp
-router.post('/verify-otp', async (req, res) => {
-  try {
-    const { phone, otp } = req.body;
-    if (!phone || !otp) {
-      return res.status(400).json({ message: 'Phone and OTP required' });
-    }
-
-    const otpRecord = await OTP.findOne({ phone }).sort({ createdAt: -1 });
-    if (!otpRecord) {
-      return res.status(400).json({ message: 'OTP expired or not found' });
-    }
-
-    const isValid = await bcrypt.compare(otp, otpRecord.otp);
-    if (!isValid) {
-      return res.status(400).json({ message: 'Invalid OTP' });
-    }
-
-    await OTP.deleteMany({ phone });
-    res.json({ message: 'OTP verified successfully', verified: true });
-  } catch (error) {
-    console.error('Verify OTP error:', error);
-    res.status(500).json({ message: 'OTP verification failed' });
-  }
-});
-
-// POST /api/auth/register
+// ─── POST /api/auth/register ──────────────────────────────────
+// Creates user + sends OTP automatically
 router.post('/register', async (req, res) => {
   try {
-    const { name, age, phone, language, pin, voicePassphrase } = req.body;
+    const { name, age, phone, language } = req.body;
 
-    if (!name || !age || !phone || !pin) {
-      return res.status(400).json({ message: 'Name, age, phone, and PIN are required' });
+    if (!name || !age || !phone) {
+      return res.status(400).json({ success: false, error: 'Name, age and phone are required' });
+    }
+    if (!/^[0-9]{10}$/.test(phone)) {
+      return res.status(400).json({ success: false, error: 'Valid 10-digit phone number required' });
     }
 
     const existingUser = await User.findOne({ phone });
     if (existingUser) {
-      return res.status(400).json({ message: 'Phone number already registered' });
+      return res.status(400).json({ success: false, error: 'Phone number already registered' });
     }
 
-    const hashedPin = await bcrypt.hash(pin, 10);
-    const savingsNumber = await generateAccountNumber('SB');
-    const pensionNumber = await generateAccountNumber('PN');
-
-    let voiceprint = [];
-    if (voicePassphrase) {
-      const embedding = await generateEmbedding(voicePassphrase);
-      if (!embedding) {
-        return res.status(500).json({ message: 'Failed to process voice passphrase. Please try again.' });
-      }
-      voiceprint = embedding;
-    }
+    // Auto-generate unique account numbers
+    const accounts = await generateUserAccounts();
 
     const user = await User.create({
       name,
-      age,
+      age: parseInt(age),
       phone,
       language: language || 'en',
-      pin: hashedPin,
-      voiceprint,
-      accounts: [
-        { type: 'savings', number: savingsNumber, balance: 25000 },
-        { type: 'pension', number: pensionNumber, balance: 50000 }
-      ]
+      accounts,
     });
 
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-    user.refreshToken = refreshToken;
-    await user.save();
+    // Auto-send OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOTP = await bcrypt.hash(otp, 10);
+    await OTP.deleteMany({ phone });
+    await OTP.create({ phone, otp: hashedOTP });
+    await sendOTP(phone, otp);
 
-    setRefreshCookie(res, refreshToken);
-    res.status(201).json({
-      message: 'Registration successful',
-      accessToken,
-      user: { id: user._id, name: user.name, phone: user.phone, language: user.language }
-    });
+    res.status(201).json({ success: true, message: 'Account created. OTP sent to your phone.' });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: 'Registration failed' });
+    res.status(500).json({ success: false, error: 'Registration failed' });
   }
 });
 
-// POST /api/auth/login/otp
-router.post('/login/otp', async (req, res) => {
+// ─── POST /api/auth/verify-otp ────────────────────────────────
+// Returns JWT so frontend can call set-pin next
+router.post('/verify-otp', async (req, res) => {
   try {
     const { phone, otp } = req.body;
-    const user = await User.findOne({ phone });
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    if (user.isLocked) {
-      return res.status(423).json({ message: 'Account is locked. Please reset via OTP.' });
+    if (!phone || !otp) {
+      return res.status(400).json({ success: false, error: 'Phone and OTP required' });
     }
 
     const otpRecord = await OTP.findOne({ phone }).sort({ createdAt: -1 });
     if (!otpRecord) {
-      return res.status(400).json({ message: 'OTP expired or not found' });
+      return res.status(400).json({ success: false, error: 'OTP expired or not found' });
     }
 
     const isValid = await bcrypt.compare(otp, otpRecord.otp);
     if (!isValid) {
-      return res.status(400).json({ message: 'Invalid OTP' });
+      return res.status(400).json({ success: false, error: 'Invalid OTP' });
     }
 
     await OTP.deleteMany({ phone });
 
-    // Reset failed attempts on successful login
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Reset lock if any
     user.failedPinAttempts = 0;
     user.isLocked = false;
 
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-    user.refreshToken = refreshToken;
-    await user.save();
+    const accessToken = await issueTokens(user, res);
 
-    setRefreshCookie(res, refreshToken);
     res.json({
-      message: 'Login successful',
+      success: true,
       accessToken,
-      user: { id: user._id, name: user.name, phone: user.phone, language: user.language }
+      data: {
+        id: user._id,
+        name: user.name,
+        phone: user.phone,
+        language: user.language,
+        accounts: user.accounts,
+      }
     });
   } catch (error) {
-    console.error('OTP login error:', error);
-    res.status(500).json({ message: 'Login failed' });
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ success: false, error: 'OTP verification failed' });
   }
 });
 
-// POST /api/auth/login/pin
+// ─── POST /api/auth/set-pin (JWT required) ────────────────────
+router.post('/set-pin', verifyToken, async (req, res) => {
+  try {
+    const { pin, confirmPin } = req.body;
+    if (!pin || !confirmPin) {
+      return res.status(400).json({ success: false, error: 'PIN and confirm PIN required' });
+    }
+    if (!/^[0-9]{4}$/.test(pin)) {
+      return res.status(400).json({ success: false, error: 'PIN must be exactly 4 digits' });
+    }
+    if (pin !== confirmPin) {
+      return res.status(400).json({ success: false, error: 'PINs do not match' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    user.pin = await bcrypt.hash(pin, 10);
+    await user.save();
+
+    res.json({ success: true, message: 'PIN set successfully' });
+  } catch (error) {
+    console.error('Set PIN error:', error);
+    res.status(500).json({ success: false, error: 'Failed to set PIN' });
+  }
+});
+
+// ─── POST /api/auth/enroll-voice (JWT required) ───────────────
+router.post('/enroll-voice', verifyToken, async (req, res) => {
+  try {
+    const { voiceVector } = req.body;
+
+    if (!voiceVector || !Array.isArray(voiceVector) || voiceVector.length !== 256) {
+      return res.status(400).json({ success: false, error: 'Valid 256-float voice vector required' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    user.voiceprint = voiceVector;
+    await user.save();
+
+    res.json({ success: true, message: 'Voice enrolled successfully' });
+  } catch (error) {
+    console.error('Voice enroll error:', error);
+    res.status(500).json({ success: false, error: 'Voice enrollment failed' });
+  }
+});
+
+// ─── POST /api/auth/login/otp ─────────────────────────────────
+router.post('/login/otp', async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+    const user = await User.findOne({ phone });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    if (user.isLocked) return res.status(423).json({ success: false, error: 'Account locked. Reset via OTP.' });
+
+    const otpRecord = await OTP.findOne({ phone }).sort({ createdAt: -1 });
+    if (!otpRecord) return res.status(400).json({ success: false, error: 'OTP expired or not found' });
+
+    const isValid = await bcrypt.compare(otp, otpRecord.otp);
+    if (!isValid) return res.status(400).json({ success: false, error: 'Invalid OTP' });
+
+    await OTP.deleteMany({ phone });
+    user.failedPinAttempts = 0;
+    user.isLocked = false;
+
+    const accessToken = await issueTokens(user, res);
+    res.json({
+      success: true,
+      accessToken,
+      data: { id: user._id, name: user.name, phone: user.phone, language: user.language, accounts: user.accounts }
+    });
+  } catch (error) {
+    console.error('OTP login error:', error);
+    res.status(500).json({ success: false, error: 'Login failed' });
+  }
+});
+
+// ─── POST /api/auth/login/pin ─────────────────────────────────
 router.post('/login/pin', async (req, res) => {
   try {
     const { phone, pin } = req.body;
     const user = await User.findOne({ phone });
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    if (user.isLocked) {
-      return res.status(423).json({ message: 'Account is locked. Please reset via OTP.' });
-    }
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    if (user.isLocked) return res.status(423).json({ success: false, error: 'Account locked. Reset via OTP.' });
+    if (!user.pin) return res.status(400).json({ success: false, error: 'PIN not set. Please register again.' });
 
     const isValid = await bcrypt.compare(pin, user.pin);
     if (!isValid) {
@@ -195,108 +243,86 @@ router.post('/login/pin', async (req, res) => {
       if (user.failedPinAttempts >= 5) {
         user.isLocked = true;
         await user.save();
-        return res.status(423).json({ message: 'Account locked due to too many failed attempts. Reset via OTP.', attemptsUsed: 5, maxAttempts: 5 });
+        return res.status(423).json({ success: false, error: 'Account locked after 5 failed attempts.', attemptsUsed: 5, maxAttempts: 5 });
       }
       await user.save();
-      return res.status(400).json({
-        message: 'Invalid PIN',
-        attemptsUsed: user.failedPinAttempts,
-        maxAttempts: 5
-      });
+      return res.status(400).json({ success: false, error: 'Invalid PIN', attemptsUsed: user.failedPinAttempts, maxAttempts: 5 });
     }
 
     user.failedPinAttempts = 0;
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-    user.refreshToken = refreshToken;
-    await user.save();
-
-    setRefreshCookie(res, refreshToken);
+    const accessToken = await issueTokens(user, res);
     res.json({
-      message: 'Login successful',
+      success: true,
       accessToken,
-      user: { id: user._id, name: user.name, phone: user.phone, language: user.language }
+      data: { id: user._id, name: user.name, phone: user.phone, language: user.language, accounts: user.accounts }
     });
   } catch (error) {
     console.error('PIN login error:', error);
-    res.status(500).json({ message: 'Login failed' });
+    res.status(500).json({ success: false, error: 'Login failed' });
   }
 });
 
-// POST /api/auth/login/voice
+// ─── POST /api/auth/login/voice ───────────────────────────────
 router.post('/login/voice', async (req, res) => {
   try {
-    const { phone, voicePassphrase } = req.body;
+    const { phone, voiceVector } = req.body; // ✅ vector, text nahi
+
+    if (!phone || !voiceVector || !Array.isArray(voiceVector) || voiceVector.length !== 256) {
+      return res.status(400).json({ success: false, error: 'Phone and valid voice vector required' });
+    }
+
     const user = await User.findOne({ phone });
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    if (user.isLocked) {
-      return res.status(423).json({ message: 'Account is locked. Please reset via OTP.' });
-    }
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    if (user.isLocked) return res.status(423).json({ success: false, error: 'Account locked. Reset via OTP.' });
     if (!user.voiceprint || user.voiceprint.length === 0) {
-      return res.status(400).json({ message: 'Voice login not set up for this account' });
+      return res.status(400).json({ success: false, error: 'Voice login not set up. Please use PIN.' });
     }
 
-    const embedding = await generateEmbedding(voicePassphrase);
-    if (!embedding) {
-      return res.status(500).json({ message: 'Voice processing failed' });
-    }
-
-    const similarity = cosineSimilarity(embedding, user.voiceprint);
+    // Cosine similarity check
+    const similarity = cosineSimilarity(voiceVector, user.voiceprint);
     if (similarity < 0.85) {
-      return res.status(401).json({ message: 'Voice not recognized. Please try again or use another login method.', similarity });
+      return res.status(401).json({ success: false, error: 'Voice not recognized. Please try again or use PIN.' });
     }
 
     user.failedPinAttempts = 0;
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-    user.refreshToken = refreshToken;
-    await user.save();
-
-    setRefreshCookie(res, refreshToken);
+    const accessToken = await issueTokens(user, res);
     res.json({
-      message: 'Login successful',
+      success: true,
       accessToken,
-      user: { id: user._id, name: user.name, phone: user.phone, language: user.language }
+      data: { id: user._id, name: user.name, phone: user.phone, language: user.language, accounts: user.accounts }
     });
   } catch (error) {
     console.error('Voice login error:', error);
-    res.status(500).json({ message: 'Login failed' });
+    res.status(500).json({ success: false, error: 'Login failed' });
   }
 });
 
-// POST /api/auth/refresh
+// ─── POST /api/auth/refresh ───────────────────────────────────
 router.post('/refresh', async (req, res) => {
   try {
     const token = req.cookies.refreshToken;
-    if (!token) {
-      return res.status(401).json({ message: 'Refresh token required' });
-    }
+    if (!token) return res.status(401).json({ success: false, error: 'Refresh token required' });
 
     const decoded = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
     const user = await User.findById(decoded.id);
+
     if (!user || user.refreshToken !== token) {
-      return res.status(403).json({ message: 'Invalid refresh token' });
+      return res.status(403).json({ success: false, error: 'Invalid refresh token' });
     }
 
-    const accessToken = generateAccessToken(user);
-    const newRefreshToken = generateRefreshToken(user);
-    user.refreshToken = newRefreshToken;
-    await user.save();
-
-    setRefreshCookie(res, newRefreshToken);
+    const accessToken = await issueTokens(user, res);
     res.json({
+      success: true,
       accessToken,
-      user: { id: user._id, name: user.name, phone: user.phone, language: user.language }
+      data: { id: user._id, name: user.name, phone: user.phone, language: user.language, accounts: user.accounts }
     });
   } catch (error) {
     console.error('Refresh error:', error);
-    res.status(403).json({ message: 'Invalid refresh token' });
+    res.status(403).json({ success: false, error: 'Invalid or expired refresh token' });
   }
 });
 
-// POST /api/auth/logout
+// ─── POST /api/auth/logout ────────────────────────────────────
 router.post('/logout', async (req, res) => {
   try {
     const token = req.cookies.refreshToken;
@@ -308,12 +334,11 @@ router.post('/logout', async (req, res) => {
         await user.save();
       }
     }
-    res.clearCookie('refreshToken');
-    res.json({ message: 'Logged out successfully' });
-  } catch (error) {
-    res.clearCookie('refreshToken');
-    res.json({ message: 'Logged out successfully' });
+  } catch (_) {
+    // token already expired — still logout
   }
+  res.clearCookie('refreshToken');
+  res.json({ success: true, message: 'Logged out successfully' });
 });
 
 module.exports = router;

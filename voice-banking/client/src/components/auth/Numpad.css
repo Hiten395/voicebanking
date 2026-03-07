@@ -1,0 +1,75 @@
+.numpad-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xl);
+}
+
+.pin-dots {
+  display: flex;
+  gap: var(--space-lg);
+}
+
+.pin-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  transition: all var(--transition-fast);
+}
+
+.pin-dot.filled {
+  background: var(--accent-yellow);
+  border-color: var(--accent-yellow);
+  box-shadow: 0 0 8px var(--accent-yellow-glow);
+}
+
+.numpad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 280px;
+}
+
+.numpad-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: 1.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.numpad-key:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-yellow);
+}
+
+.numpad-key:active {
+  transform: scale(0.95);
+  background: var(--accent-yellow);
+  color: var(--text-inverse);
+}
+
+.numpad-key.empty {
+  border: none;
+  background: transparent;
+  cursor: default;
+}
+
+.numpad-key.empty:hover {
+  background: transparent;
+  border: none;
+}
