@@ -6,7 +6,7 @@ require('dotenv').config();
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const bankingRoutes = require('./routes/bankingRoutes');
-
+const path = require('path')
 const app = express();
 
 // Middleware
