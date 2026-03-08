@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
-import LoginOTP from '../components/auth/LoginOtp';
+import LoginOTP from '../components/auth/LoginOTP';
 import LoginPIN from '../components/auth/LoginPIN';
 import LoginVoice from '../components/auth/LoginVoice';
 import RegisterStepper from '../components/auth/RegisterStepper';
