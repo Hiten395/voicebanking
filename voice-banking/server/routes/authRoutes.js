@@ -22,7 +22,8 @@ const issueTokens = (user) => {
 // ─── POST /api/auth/send-otp ──────────────────────────────────
 router.post('/send-otp', async (req, res) => {
   try {
-    const { identifier } = req.body;
+   const { identifier, phone } = req.body; // ✅ phone bhi lo
+    const target = identifier || phone;
     if (!identifier) {
       return res.status(400).json({ success: false, error: 'Phone number or username required' });
     }
