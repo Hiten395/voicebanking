@@ -87,7 +87,7 @@ const RegisterStepper = () => {
     setLoading(true);
     setError('');
     try {
-      await api.post('/auth/send-otp', { phone });
+      await api.post('/auth/send-otp', {identifier: phone });
       setStep(3);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send OTP. Please try again.');
