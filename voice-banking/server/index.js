@@ -19,9 +19,7 @@ app.use(express.json());
 
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/dist', 'index.html'));
-});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/user', bankingRoutes);
@@ -31,7 +29,9 @@ app.use('/api/voice', bankingRoutes);
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
 });
-
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/dist', 'index.html'));
+});
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
