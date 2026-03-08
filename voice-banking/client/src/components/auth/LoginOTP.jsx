@@ -7,18 +7,22 @@ import api from '../../utils/api';
 const LoginOTP = () => {
   const { t } = useLanguage();
   const { login } = useAuth();
-  const [phone, setPhone] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleSendOTP = async (e) => {
     e.preventDefault();
-    if (phone.length !== 10) return;
+    if (!identifier || identifier.length < 3) return;
     setLoading(true);
     setError('');
     try {
-      await api.post('/auth/send-otp', { phone });
+      const res = await api.post('/auth/send-otp', { identifier });
+      // We can also let the user know where the OTP was sent if the endpoint returns masked phone
+      if (res.data.phone) {
+        // Just store the actual phone or a flag if we want
+      }
       setOtpSent(true);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send OTP');
@@ -31,7 +35,7 @@ const LoginOTP = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.post('/auth/login/otp', { phone, otp });
+      const res = await api.post('/auth/login/otp', { identifier, otp });
       login(res.data);
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed');
@@ -45,36 +49,35 @@ const LoginOTP = () => {
       {!otpSent ? (
         <form onSubmit={handleSendOTP}>
           <div className="input-group mb-lg">
-            <label htmlFor="otp-phone">{t('phone')}</label>
+            <label htmlFor="otp-identifier">{t('phoneOrUsername') || 'Phone or Username'}</label>
             <input
-              id="otp-phone"
-              type="tel"
+              id="otp-identifier"
+              type="text"
               className="input"
-              placeholder="9876543210"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              inputMode="numeric"
-              maxLength={10}
-              aria-describedby="phone-hint"
+              placeholder="e.g. 9876543210 or ramesh_kumar"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+              autoComplete="username"
+              aria-describedby="identifier-hint"
               required
             />
-            <span id="phone-hint" className="sr-only">Enter your 10-digit Indian mobile number</span>
+            <span id="identifier-hint" className="sr-only">Enter your 10-digit mobile number or username</span>
           </div>
           {error && <p className="error-msg" role="alert">{error}</p>}
-          <button type="submit" className="btn btn-primary btn-block" disabled={phone.length !== 10 || loading}>
+          <button type="submit" className="btn btn-primary btn-block" disabled={identifier.length < 3 || loading}>
             {loading ? <span className="spinner" /> : t('sendOTP')}
           </button>
         </form>
       ) : (
         <div>
           <p className="text-center" style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
-            OTP sent to {phone}
+            OTP sent to registered phone
           </p>
           <OTPInput onComplete={handleVerifyOTP} disabled={loading} />
           {error && <p className="error-msg mt-md" role="alert">{error}</p>}
           {loading && <div className="flex justify-center mt-md"><span className="spinner" /></div>}
           <button type="button" className="btn btn-ghost btn-block mt-lg" onClick={() => { setOtpSent(false); setError(''); }}>
-            Change number
+            Change Login
           </button>
         </div>
       )}

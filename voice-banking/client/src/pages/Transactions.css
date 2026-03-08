@@ -83,11 +83,23 @@
   color: var(--text-muted);
 }
 
+.tx-card-description {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-top: 2px;
+}
+
 .tx-card-amount {
   font-size: var(--font-sm);
   font-weight: 700;
   white-space: nowrap;
 }
 
-.tx-card-amount.credit { color: var(--accent-green); }
-.tx-card-amount.debit { color: var(--accent-red); }
+.tx-card-amount.credit {
+  color: var(--accent-green);
+}
+
+.tx-card-amount.debit {
+  color: var(--accent-red);
+}

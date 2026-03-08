@@ -3,9 +3,15 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import OTPInput from './OTPInput';
 import Numpad from './Numpad';
-import { IoMicOutline, IoStopCircle, IoCheckmarkCircle } from 'react-icons/io5';
+import { IoMicOutline, IoStopCircle, IoCheckmarkCircle, IoWalletOutline, IoBriefcaseOutline, IoCashOutline } from 'react-icons/io5';
 import api from '../../utils/api';
 import './RegisterStepper.css';
+
+const ACCOUNT_TYPES = [
+  { key: 'savings', icon: IoWalletOutline, color: '#22c55e' },
+  { key: 'current', icon: IoBriefcaseOutline, color: '#3b82f6' },
+  { key: 'pension', icon: IoCashOutline, color: '#a855f7' },
+];
 
 const RegisterStepper = () => {
   const { t, language: currentLang } = useLanguage();
@@ -16,21 +22,26 @@ const RegisterStepper = () => {
   const [error, setError] = useState('');
 
   // Step 1 — Profile
+  const [username, setUsername] = useState('');
+  const [usernameAvailable, setUsernameAvailable] = useState(null);
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [phone, setPhone] = useState('');
   const [language, setLanguage] = useState(currentLang);
 
-  // Step 2 — OTP
+  // Step 2 — Account Type
+  const [accountType, setAccountType] = useState('savings');
+
+  // Step 3 — OTP
   const [otpVerified, setOtpVerified] = useState(false);
 
-  // Step 3 — PIN
+  // Step 4 — PIN
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinSet, setPinSet] = useState(false);
   const [finalPin, setFinalPin] = useState('');
 
-  // Step 4 — Voice
+  // Step 5 — Voice
   const [isRecording, setIsRecording] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [status, setStatus] = useState('');
@@ -39,21 +50,45 @@ const RegisterStepper = () => {
 
   const steps = [
     { num: 1, label: t('profile') },
-    { num: 2, label: t('otp') },
-    { num: 3, label: t('pin') },
-    { num: 4, label: t('voice') },
+    { num: 2, label: t('accountType') },
+    { num: 3, label: t('otp') },
+    { num: 4, label: t('pin') },
+    { num: 5, label: t('voice') },
   ];
 
-  // Step 1 — Send OTP and move to step 2
+  // Step 1 — Validate profile + check username, then move to step 2
   const handleStep1 = async (e) => {
     e.preventDefault();
-    if (!name || !age || phone.length !== 10) return;
+    if (!username || !name || !age || phone.length !== 10) return;
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+      setError('Username must be 3-20 characters (letters, numbers, underscore)');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      // Check if phone already registered by trying to send OTP
-      await api.post('/auth/send-otp', { phone });
+      const res = await api.post('/auth/check-username', { username, phone });
+      if (!res.data.available) {
+        setError(res.data.error || 'Username or phone already taken. Please choose another.');
+        setUsernameAvailable(false);
+        return;
+      }
+      setUsernameAvailable(true);
       setStep(2);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to check username');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2 — Account type selected, send OTP and move to step 3
+  const handleStep2 = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await api.post('/auth/send-otp', { phone });
+      setStep(3);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send OTP. Please try again.');
     } finally {
@@ -61,14 +96,14 @@ const RegisterStepper = () => {
     }
   };
 
-  // Step 2 — Verify OTP
+  // Step 3 — Verify OTP
   const handleVerifyOTP = async (otp) => {
     setLoading(true);
     setError('');
     try {
       await api.post('/auth/verify-otp', { phone, otp });
       setOtpVerified(true);
-      setStep(3);
+      setStep(4);
     } catch (err) {
       setError(err.response?.data?.message || 'OTP verification failed. Please try again.');
     } finally {
@@ -76,7 +111,7 @@ const RegisterStepper = () => {
     }
   };
 
-  // Step 3 — Set PIN (stored in state, not sent to server yet)
+  // Step 4 — Set PIN
   const handlePinSet = (value) => {
     if (!pinSet) {
       setPin(value);
@@ -86,7 +121,7 @@ const RegisterStepper = () => {
     } else {
       if (value === pin) {
         setFinalPin(value);
-        setStep(4);
+        setStep(5);
         setError('');
       } else {
         setError('PINs do not match. Try again.');
@@ -97,7 +132,7 @@ const RegisterStepper = () => {
     }
   };
 
-  // Step 4 — Voice recording using SpeechRecognition (speech → text)
+  // Step 5 — Voice recording
   const startRecording = async () => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       setError('Speech recognition not supported. Please use Chrome.');
@@ -170,7 +205,7 @@ const RegisterStepper = () => {
     }
   };
 
-  // Final registration — sends all collected data to server
+  // Final registration
   const handleRegister = async (passphrase) => {
     const voicePassphrase = passphrase || voiceTranscript;
     if (!voicePassphrase || voicePassphrase.trim().length < 3) {
@@ -182,16 +217,18 @@ const RegisterStepper = () => {
     setError('');
     try {
       const res = await api.post('/auth/register', {
+        username,
         name,
         age: parseInt(age),
         phone,
         language,
+        accountType,
         pin: finalPin,
         voicePassphrase: voicePassphrase.trim(),
       });
       login(res.data);
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      setError(err.response?.data?.error || err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -202,10 +239,12 @@ const RegisterStepper = () => {
     setError('');
     try {
       const res = await api.post('/auth/register', {
+        username,
         name,
         age: parseInt(age),
         phone,
         language,
+        accountType,
         pin: finalPin,
       });
       login(res.data);
@@ -239,8 +278,26 @@ const RegisterStepper = () => {
         </p>
       )}
 
+      {/* Step 1 — Profile */}
       {step === 1 && (
         <form onSubmit={handleStep1} className="stepper-form">
+          <div className="input-group">
+            <label htmlFor="reg-username">{t('username')}</label>
+            <input
+              id="reg-username"
+              type="text"
+              className="input"
+              value={username}
+              onChange={(e) => { setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20)); setUsernameAvailable(null); }}
+              required
+              placeholder="ramesh_kumar"
+              autoComplete="username"
+              minLength={3}
+              maxLength={20}
+            />
+            {usernameAvailable === false && <span style={{ color: 'var(--accent-red)', fontSize: 'var(--font-xs)' }}>❌ Taken</span>}
+            {usernameAvailable === true && <span style={{ color: 'var(--accent-green)', fontSize: 'var(--font-xs)' }}>✅ Available</span>}
+          </div>
           <div className="input-group">
             <label htmlFor="reg-name">{t('name')}</label>
             <input
@@ -301,14 +358,58 @@ const RegisterStepper = () => {
           <button
             type="submit"
             className="btn btn-primary btn-block mt-md"
-            disabled={!name || !age || phone.length !== 10 || loading}
+            disabled={!username || username.length < 3 || !name || !age || phone.length !== 10 || loading}
           >
             {loading ? <span className="spinner" /> : t('next')}
           </button>
         </form>
       )}
 
+      {/* Step 2 — Account Type Selection */}
       {step === 2 && (
+        <div className="stepper-form">
+          <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)', textAlign: 'center' }}>
+            {t('selectAccountType')}
+          </p>
+          <div className="account-type-grid">
+            {ACCOUNT_TYPES.map((acct) => (
+              <button
+                key={acct.key}
+                type="button"
+                className={`account-type-card ${accountType === acct.key ? 'selected' : ''}`}
+                onClick={() => setAccountType(acct.key)}
+                style={{
+                  '--card-accent': acct.color,
+                }}
+              >
+                <div className="account-type-icon" style={{ background: `${acct.color}20`, color: acct.color }}>
+                  <acct.icon size={28} />
+                </div>
+                <span className="account-type-label">{t(acct.key)}</span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-block mt-lg"
+            onClick={handleStep2}
+            disabled={loading}
+          >
+            {loading ? <span className="spinner" /> : t('next')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-block mt-sm"
+            onClick={() => { setStep(1); setError(''); }}
+            disabled={loading}
+          >
+            {t('back')}
+          </button>
+        </div>
+      )}
+
+      {/* Step 3 — OTP */}
+      {step === 3 && (
         <div className="stepper-form text-center">
           <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
             {t('enterOTP')} — sent to +91 {phone}
@@ -322,7 +423,7 @@ const RegisterStepper = () => {
           <button
             type="button"
             className="btn btn-ghost btn-block mt-lg"
-            onClick={() => { setStep(1); setError(''); }}
+            onClick={() => { setStep(2); setError(''); }}
             disabled={loading}
           >
             {t('back')}
@@ -330,7 +431,8 @@ const RegisterStepper = () => {
         </div>
       )}
 
-      {step === 3 && (
+      {/* Step 4 — PIN */}
+      {step === 4 && (
         <div className="stepper-form text-center">
           <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
             {pinSet ? 'Confirm your PIN' : t('setPin')}
@@ -349,7 +451,8 @@ const RegisterStepper = () => {
         </div>
       )}
 
-      {step === 4 && (
+      {/* Step 5 — Voice */}
+      {step === 5 && (
         <div className="stepper-form text-center">
           <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
             {t('speakPassphrase')}

@@ -10,7 +10,7 @@ import './Auth.css';
 
 const Auth = () => {
   const { t } = useLanguage();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, sessionExpired } = useAuth();
   const [mainTab, setMainTab] = useState('login');
   const [loginMethod, setLoginMethod] = useState('otp');
 
@@ -23,6 +23,11 @@ const Auth = () => {
       <div className="auth-container">
         <div className="auth-header">
           <h1 className="auth-title">{t('appName')}</h1>
+          {sessionExpired && (
+            <div className="error-msg" style={{ marginTop: 'var(--space-md)', textAlign: 'center' }} role="alert">
+              Your session has expired. Please log in again.
+            </div>
+          )}
         </div>
 
         {/* Main Tabs: Login | Create Account */}

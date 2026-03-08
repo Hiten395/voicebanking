@@ -45,6 +45,12 @@
   box-shadow: 0 4px 24px rgba(59, 130, 246, 0.08);
 }
 
+.current-card {
+  background: linear-gradient(135deg, #1a2035 0%, #0f172a 100%);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  box-shadow: 0 4px 24px rgba(34, 197, 94, 0.08);
+}
+
 .balance-label {
   font-size: var(--font-sm);
   font-weight: 600;
@@ -54,8 +60,17 @@
   margin-bottom: 2px;
 }
 
-.savings-card .balance-label { color: var(--accent-yellow); }
-.pension-card .balance-label { color: var(--accent-blue); }
+.savings-card .balance-label {
+  color: var(--accent-yellow);
+}
+
+.pension-card .balance-label {
+  color: var(--accent-blue);
+}
+
+.current-card .balance-label {
+  color: var(--accent-green);
+}
 
 .balance-account {
   font-size: var(--font-xs);
@@ -196,8 +211,13 @@
   font-weight: 700;
 }
 
-.tx-amount.credit { color: var(--accent-green); }
-.tx-amount.debit { color: var(--accent-red); }
+.tx-amount.credit {
+  color: var(--accent-green);
+}
+
+.tx-amount.debit {
+  color: var(--accent-red);
+}
 
 .tx-date {
   font-size: var(--font-xs);

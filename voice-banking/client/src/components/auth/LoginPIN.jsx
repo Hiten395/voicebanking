@@ -7,17 +7,17 @@ import api from '../../utils/api';
 const LoginPIN = () => {
   const { t } = useLanguage();
   const { login } = useAuth();
-  const [phone, setPhone] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [pin, setPin] = useState('');
-  const [phoneSubmitted, setPhoneSubmitted] = useState(false);
+  const [identifierSubmitted, setIdentifierSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [attempts, setAttempts] = useState(null);
 
-  const handlePhoneSubmit = (e) => {
+  const handleIdentifierSubmit = (e) => {
     e.preventDefault();
-    if (phone.length === 10) {
-      setPhoneSubmitted(true);
+    if (identifier.length >= 3) {
+      setIdentifierSubmitted(true);
       setError('');
     }
   };
@@ -26,7 +26,7 @@ const LoginPIN = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.post('/auth/login/pin', { phone, pin: pinValue });
+      const res = await api.post('/auth/login/pin', { identifier, pin: pinValue });
       login(res.data);
     } catch (err) {
       const data = err.response?.data;
@@ -42,23 +42,22 @@ const LoginPIN = () => {
 
   return (
     <div className="login-form animate-fade-in-up">
-      {!phoneSubmitted ? (
-        <form onSubmit={handlePhoneSubmit}>
+      {!identifierSubmitted ? (
+        <form onSubmit={handleIdentifierSubmit}>
           <div className="input-group mb-lg">
-            <label htmlFor="pin-phone">{t('phone')}</label>
+            <label htmlFor="pin-identifier">{t('phoneOrUsername') || 'Phone or Username'}</label>
             <input
-              id="pin-phone"
-              type="tel"
+              id="pin-identifier"
+              type="text"
               className="input"
-              placeholder="9876543210"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              inputMode="numeric"
-              maxLength={10}
+              placeholder="e.g. 9876543210 or ramesh_kumar"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+              autoComplete="username"
               required
             />
           </div>
-          <button type="submit" className="btn btn-primary btn-block" disabled={phone.length !== 10}>
+          <button type="submit" className="btn btn-primary btn-block" disabled={identifier.length < 3}>
             {t('next')}
           </button>
         </form>
@@ -75,8 +74,8 @@ const LoginPIN = () => {
           {error && <p className="error-msg text-center mb-md" role="alert">{error}</p>}
           <Numpad value={pin} onChange={setPin} maxLength={4} onComplete={handlePinComplete} />
           {loading && <div className="flex justify-center mt-md"><span className="spinner" /></div>}
-          <button type="button" className="btn btn-ghost btn-block mt-lg" onClick={() => { setPhoneSubmitted(false); setPin(''); setError(''); setAttempts(null); }}>
-            Change number
+          <button type="button" className="btn btn-ghost btn-block mt-lg" onClick={() => { setIdentifierSubmitted(false); setPin(''); setError(''); setAttempts(null); }}>
+            Change Login
           </button>
         </div>
       )}

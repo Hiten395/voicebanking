@@ -19,25 +19,30 @@ const getGenAI = () => {
 };
 
 const buildPrompt = (text, userData) => {
+  const transactionsList = userData.transactions && userData.transactions.length > 0
+    ? userData.transactions.map(t =>
+      `- ${t.type === 'credit' ? '+' : '-'}₹${t.amount} | ${t.merchant} | ${t.category} | ${new Date(t.date).toLocaleDateString('en-IN')}`
+    ).join('\n')
+    : 'No recent transactions.';
+
   const userContext = `
 User Profile:
 - Name: ${userData.name}
 - Language preference: ${userData.language}
 
 Accounts:
-${userData.accounts.map(a => 
-  `- ${a.type.charAt(0).toUpperCase() + a.type.slice(1)} (${a.number}): ₹${a.balance.toLocaleString('en-IN')}`
-).join('\n')}
+${userData.accounts.map(a =>
+    `- ${a.type.charAt(0).toUpperCase() + a.type.slice(1)} (${a.number}): ₹${a.balance.toLocaleString('en-IN')}`
+  ).join('\n')}
 
 Recent Transactions:
-${userData.transactions.map(t => 
-  `- ${t.type === 'credit' ? '+' : '-'}₹${t.amount} | ${t.merchant} | ${t.category} | ${new Date(t.date).toLocaleDateString('en-IN')}`
-).join('\n')}
+${transactionsList}
 `;
 
   return {
     system: `You are VoiceBank AI, a helpful and friendly voice banking assistant for ${userData.name}.
 You help users check balances, view transactions, understand spending, and get banking information.
+IMPORTANT: You CANNOT perform transactions (deposit, withdraw, transfer). If the user asks to perform a transaction, politely tell them to use the Transactions or Transfer tab in the application. Do NOT pretend to execute any transaction.
 Always respond in a warm, conversational tone suitable for being spoken aloud.
 Keep responses concise (2-3 sentences max) and use Indian Rupee (₹) formatting.
 If the user speaks in Hindi or another Indian language, respond in that language.

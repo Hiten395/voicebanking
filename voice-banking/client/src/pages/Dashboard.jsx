@@ -6,6 +6,12 @@ import { IoMicOutline, IoReceiptOutline, IoSwapHorizontalOutline, IoStatsChartOu
 import api from '../utils/api';
 import './Dashboard.css';
 
+const CARD_COLORS = {
+  savings: 'savings-card',
+  current: 'current-card',
+  pension: 'pension-card',
+};
+
 const Dashboard = () => {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -64,8 +70,7 @@ const Dashboard = () => {
     );
   }
 
-  const savingsAccount = profile?.accounts?.find(a => a.type === 'savings');
-  const pensionAccount = profile?.accounts?.find(a => a.type === 'pension');
+  const accounts = profile?.accounts || [];
 
   return (
     <div className="page dashboard-page">
@@ -74,22 +79,19 @@ const Dashboard = () => {
         {getGreeting()}
       </h1>
 
-      {/* Balance Cards */}
+      {/* Balance Cards — dynamically rendered */}
       <div className="balance-cards">
-        {savingsAccount && (
-          <div className="balance-card savings-card animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            <span className="balance-label">{t('savings')}</span>
-            <span className="balance-account">{savingsAccount.number}</span>
-            <span className="balance-amount">{formatCurrency(savingsAccount.balance)}</span>
+        {accounts.map((account, index) => (
+          <div
+            key={account.number}
+            className={`balance-card ${CARD_COLORS[account.type] || 'savings-card'} animate-fade-in-up`}
+            style={{ animationDelay: `${0.1 + index * 0.1}s` }}
+          >
+            <span className="balance-label">{t(account.type)}</span>
+            <span className="balance-account">{account.number}</span>
+            <span className="balance-amount">{formatCurrency(account.balance)}</span>
           </div>
-        )}
-        {pensionAccount && (
-          <div className="balance-card pension-card animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            <span className="balance-label">{t('pension')}</span>
-            <span className="balance-account">{pensionAccount.number}</span>
-            <span className="balance-amount">{formatCurrency(pensionAccount.balance)}</span>
-          </div>
-        )}
+        ))}
       </div>
 
       {/* Quick Actions */}
@@ -128,7 +130,7 @@ const Dashboard = () => {
               </div>
               <div className="tx-details">
                 <span className="tx-merchant">{tx.merchant}</span>
-                <span className="tx-category">{tx.category}</span>
+                <span className="tx-category">{tx.category}{tx.description ? ` • ${tx.description}` : ''}</span>
               </div>
               <div className="tx-amount-col">
                 <span className={`tx-amount ${tx.type}`}>
@@ -139,7 +141,10 @@ const Dashboard = () => {
             </div>
           ))}
           {transactions.length === 0 && (
-            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--space-lg)' }}>No recent transactions</p>
+            <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--space-lg)' }}>
+              <p>{t('noTransactionsYet')}</p>
+              <p style={{ fontSize: 'var(--font-sm)', marginTop: 'var(--space-sm)' }}>{t('makeFirstDeposit')}</p>
+            </div>
           )}
         </div>
       </div>

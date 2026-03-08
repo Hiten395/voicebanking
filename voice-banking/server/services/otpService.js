@@ -1,4 +1,4 @@
-const axios = require('axios');
+const twilio = require('twilio');
 
 /**
  * Generate a 6-digit numeric OTP
@@ -8,8 +8,8 @@ const generateOTP = () => {
 };
 
 /**
- * Send OTP to Indian mobile number via Fast2SMS
- * OTP_MODE=fast2sms → real SMS
+ * Send OTP via Twilio
+ * OTP_MODE=twilio → real SMS
  * OTP_MODE=console  → print to terminal (local dev / fallback)
  *
  * @param {string} phone - 10-digit Indian number, no +91
@@ -18,39 +18,32 @@ const generateOTP = () => {
 const sendOTP = async (phone, otp) => {
   const mode = process.env.OTP_MODE || 'console';
 
-  if (mode === 'fast2sms') {
-    try {
-      const response = await axios.post(
-  'https://www.fast2sms.com/dev/bulkV2',
-  {
-    route: 'q',                              // ← 'otp' se 'q' karo
-    message: `Your VoiceBank OTP is ${otp}. Valid for 5 minutes.`,
-    numbers: phone,
-    flash: 0,
-  },
-  {
-    headers: {
-      authorization: process.env.FAST2SMS_API_KEY,
-      'Content-Type': 'application/json',
-    },
-  }
-);
+  if (mode === 'twilio') {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
 
-      if (response.data?.return === true) {
-        console.log(`✅ OTP sent via Fast2SMS to ${phone}`);
+    if (!accountSid || !authToken || !twilioPhone) {
+      console.error('⚠️ Twilio credentials missing in .env. Falling back to console.');
+    } else {
+      try {
+        const client = twilio(accountSid, authToken);
+        const formattedPhone = phone.startsWith('+') ? phone : `+91${phone}`;
+
+        const message = await client.messages.create({
+          body: `Your VoiceBank OTP is ${otp}. Valid for 5 minutes.`,
+          from: twilioPhone,
+          to: formattedPhone
+        });
+
+        console.log(`✅ OTP sent via Twilio to ${formattedPhone} (SID: ${message.sid})`);
         return true;
-      } else {
-        // Fast2SMS returned error response
-        console.error('⚠️ Fast2SMS error response:', response.data);
+      } catch (error) {
+        console.error('⚠️ Twilio failed:', error.message);
         console.log(`📱 OTP fallback for ${phone}: ${otp}`);
         return true;
       }
-
-    } catch (error) {
-  console.error('⚠️ Fast2SMS failed:', error.response?.data); // ← yeh add karo
-  console.log(`📱 OTP fallback for ${phone}: ${otp}`);
-  return true;
-}
+    }
   }
 
   // Console mode — local dev default

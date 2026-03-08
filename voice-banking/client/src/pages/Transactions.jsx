@@ -6,11 +6,24 @@ import './Transactions.css';
 const Transactions = () => {
   const { t } = useLanguage();
   const [transactions, setTransactions] = useState([]);
+  const [profile, setProfile] = useState(null);
   const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await api.get('/user/profile');
+        setProfile(res.data.user);
+      } catch (err) {
+        console.error('Profile fetch error:', err);
+      }
+    };
+    fetchProfile();
+  }, []);
 
   const fetchTransactions = async (pageNum = 1, accountType = filter, append = false) => {
     try {
@@ -55,7 +68,7 @@ const Transactions = () => {
     }).format(amount);
   };
 
-  // Group transactions by month
+  // Group transactions by date
   const groupedTransactions = transactions.reduce((groups, tx) => {
     const date = new Date(tx.date);
     const key = `${date.toLocaleString('en-IN', { month: 'long' })} ${date.getFullYear()}`;
@@ -64,10 +77,11 @@ const Transactions = () => {
     return groups;
   }, {});
 
+  // Build dynamic filter pills from user's account types
+  const accountTypes = profile?.accounts?.map(a => a.type) || [];
   const filters = [
     { value: 'all', label: t('all') },
-    { value: 'savings', label: t('savings') },
-    { value: 'pension', label: t('pension') },
+    ...accountTypes.map(type => ({ value: type, label: t(type) })),
   ];
 
   if (loading) {
@@ -82,7 +96,7 @@ const Transactions = () => {
     <div className="page transactions-page">
       <h1 className="page-title">{t('transactions')}</h1>
 
-      {/* Filter Pills */}
+      {/* Filter Pills — dynamic */}
       <div className="filter-pills" role="group" aria-label="Filter transactions">
         {filters.map((f) => (
           <button
@@ -115,6 +129,9 @@ const Transactions = () => {
                     {new Date(tx.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     {' • '}{tx.category}
                   </span>
+                  {tx.description && (
+                    <span className="tx-card-description">{tx.description}</span>
+                  )}
                 </div>
                 <span className={`tx-card-amount ${tx.type}`}>
                   {tx.type === 'credit' ? '+' : '-'}{formatCurrency(tx.amount)}
@@ -127,7 +144,8 @@ const Transactions = () => {
 
       {transactions.length === 0 && (
         <div className="text-center" style={{ padding: 'var(--space-3xl)', color: 'var(--text-muted)' }}>
-          No transactions found
+          <p style={{ fontSize: 'var(--font-lg)', marginBottom: 'var(--space-sm)' }}>{t('noTransactionsYet')}</p>
+          <p style={{ fontSize: 'var(--font-sm)' }}>{t('makeFirstDeposit')}</p>
         </div>
       )}
 

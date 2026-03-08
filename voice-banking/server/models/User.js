@@ -1,12 +1,13 @@
 const mongoose = require('mongoose');
 
 const accountSchema = new mongoose.Schema({
-  type: { type: String, enum: ['savings', 'pension'], required: true },
+  type: { type: String, enum: ['savings', 'current', 'pension'], required: true },
   number: { type: String, required: true },
   balance: { type: Number, default: 0 }
 });
 
 const userSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true, trim: true, lowercase: true, match: /^[a-zA-Z0-9_]{3,20}$/ },
   name: { type: String, required: true, trim: true },
   age: { type: Number, required: true },
   phone: { type: String, required: true, unique: true, match: /^[0-9]{10}$/ },
@@ -15,8 +16,7 @@ const userSchema = new mongoose.Schema({
   voiceprint: { type: [Number], default: [] },
   accounts: [accountSchema],
   failedPinAttempts: { type: Number, default: 0 },
-  isLocked: { type: Boolean, default: false },
-  refreshToken: { type: String, default: null }
+  isLocked: { type: Boolean, default: false }
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

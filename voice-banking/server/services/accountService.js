@@ -1,5 +1,11 @@
 const User = require('../models/User');
 
+const ACCOUNT_PREFIXES = {
+  savings: 'SAV',
+  current: 'CUR',
+  pension: 'PEN'
+};
+
 const generateAccountNumber = async (prefix) => {
   let number;
   let exists = true;
@@ -12,13 +18,16 @@ const generateAccountNumber = async (prefix) => {
   return number;
 };
 
-const generateUserAccounts = async () => {
-  const savingsNumber = await generateAccountNumber('SAV');
-  const pensionNumber = await generateAccountNumber('PEN');
+const generateUserAccounts = async (accountType = 'savings') => {
+  const prefix = ACCOUNT_PREFIXES[accountType];
+  if (!prefix) {
+    throw new Error(`Invalid account type: ${accountType}`);
+  }
+
+  const accountNumber = await generateAccountNumber(prefix);
 
   return [
-    { type: 'savings', number: savingsNumber, balance: 10000 },
-    { type: 'pension', number: pensionNumber, balance: 25000 }
+    { type: accountType, number: accountNumber, balance: 0 }
   ];
 };
 

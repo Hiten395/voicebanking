@@ -62,6 +62,11 @@ const translations = {
     amount: 'Amount',
     description: 'Description',
     optionalDescription: 'Optional description',
+    current: 'Current',
+    selectAccountType: 'Select Account Type',
+    accountType: 'Account Type',
+    noTransactionsYet: 'No transactions yet',
+    makeFirstDeposit: 'Make your first deposit to get started!',
   },
   hi: {
     appName: 'वॉइसबैंक',
@@ -126,6 +131,11 @@ const translations = {
     amount: 'राशि',
     description: 'विवरण',
     optionalDescription: 'वैकल्पिक विवरण',
+    current: 'चालू',
+    selectAccountType: 'खाता प्रकार चुनें',
+    accountType: 'खाता प्रकार',
+    noTransactionsYet: 'अभी तक कोई लेनदेन नहीं',
+    makeFirstDeposit: 'शुरू करने के लिए अपनी पहली जमा करें!',
   },
   ta: {
     appName: 'வாய்ஸ்பேங்க்',
@@ -190,6 +200,11 @@ const translations = {
     amount: 'தொகை',
     description: 'விளக்கம்',
     optionalDescription: 'விருப்ப விளக்கம்',
+    current: 'நடப்பு',
+    selectAccountType: 'கணக்கு வகையைத் தேர்ந்தெடுக்கவும்',
+    accountType: 'கணக்கு வகை',
+    noTransactionsYet: 'இன்னும் பரிவர்த்தனைகள் இல்லை',
+    makeFirstDeposit: 'தொடங்க உங்கள் முதல் டெபாசிட்டை செய்யுங்கள்!',
   },
   te: {
     appName: 'వాయిస్‌బ్యాంక్',
@@ -254,6 +269,11 @@ const translations = {
     amount: 'మొత్తం',
     description: 'వివరణ',
     optionalDescription: 'ఐచ్ఛిక వివరణ',
+    current: 'కరెంట్',
+    selectAccountType: 'ఖాతా రకాన్ని ఎంచుకోండి',
+    accountType: 'ఖాతా రకం',
+    noTransactionsYet: 'ఇంకా లావాదేవీలు లేవు',
+    makeFirstDeposit: 'ప్రారంభించడానికి మీ మొదటి డిపాజిట్ చేయండి!',
   }
 };
 

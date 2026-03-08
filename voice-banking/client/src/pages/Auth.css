@@ -24,6 +24,16 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  letter-spacing: -0.02em;
+}
+
+.auth-header p {
+  color: var(--text-secondary);
+  font-size: var(--font-md);
+  margin-top: var(--space-sm);
+  max-width: 80%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .login-methods {
@@ -43,4 +53,21 @@
   background: var(--accent-red-glow);
   border-radius: var(--radius-sm);
   border: 1px solid rgba(239, 68, 68, 0.3);
+  text-align: center;
+}
+
+.login-form .input {
+  transition: all var(--transition-base);
+}
+
+.login-form .input:focus {
+  border-color: var(--accent-yellow);
+  box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.1);
+}
+
+.login-methods .pill {
+  flex: 1;
+  text-align: center;
+  padding: var(--space-md);
+  font-weight: 500;
 }

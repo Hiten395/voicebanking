@@ -1,4 +1,5 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const { verifyToken } = require('../middleware/auth');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
@@ -82,10 +83,10 @@ router.post('/query', async (req, res) => {
 // POST /api/user/transfer — Transfer between own accounts (savings ↔ pension)
 router.post('/transfer', async (req, res) => {
   try {
-    const { fromAccount, toAccount, amount, description } = req.body;
+    const { fromAccount, toAccount, amount, description, pin } = req.body;
 
-    if (!fromAccount || !toAccount || !amount) {
-      return res.status(400).json({ message: 'fromAccount, toAccount and amount are required' });
+    if (!fromAccount || !toAccount || !amount || !pin) {
+      return res.status(400).json({ message: 'fromAccount, toAccount, amount and pin are required' });
     }
     if (fromAccount === toAccount) {
       return res.status(400).json({ message: 'Cannot transfer to the same account' });
@@ -97,6 +98,9 @@ router.post('/transfer', async (req, res) => {
 
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const isValidPin = await bcrypt.compare(pin, user.pin);
+    if (!isValidPin) return res.status(400).json({ message: 'Invalid PIN' });
 
     const sourceAcc = user.accounts.find(a => a.type === fromAccount);
     const destAcc = user.accounts.find(a => a.type === toAccount);
@@ -111,6 +115,7 @@ router.post('/transfer', async (req, res) => {
     // Update balances
     sourceAcc.balance -= parsedAmount;
     destAcc.balance += parsedAmount;
+    user.markModified('accounts');
     await user.save();
 
     // Create transaction records
@@ -153,10 +158,10 @@ router.post('/transfer', async (req, res) => {
 // POST /api/user/deposit — Deposit money into an account
 router.post('/deposit', async (req, res) => {
   try {
-    const { accountType, amount, description } = req.body;
+    const { accountType, amount, description, pin } = req.body;
 
-    if (!accountType || !amount) {
-      return res.status(400).json({ message: 'accountType and amount are required' });
+    if (!accountType || !amount || !pin) {
+      return res.status(400).json({ message: 'accountType, amount and pin are required' });
     }
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -166,6 +171,9 @@ router.post('/deposit', async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
+    const isValidPin = await bcrypt.compare(pin, user.pin);
+    if (!isValidPin) return res.status(400).json({ message: 'Invalid PIN' });
+
     const account = user.accounts.find(a => a.type === accountType);
     if (!account) {
       return res.status(400).json({ message: 'Invalid account type' });
@@ -173,6 +181,7 @@ router.post('/deposit', async (req, res) => {
 
     // Update balance
     account.balance += parsedAmount;
+    user.markModified('accounts');
     await user.save();
 
     // Create transaction record
@@ -201,10 +210,10 @@ router.post('/deposit', async (req, res) => {
 // POST /api/user/withdraw — Withdraw money from an account
 router.post('/withdraw', async (req, res) => {
   try {
-    const { accountType, amount, description } = req.body;
+    const { accountType, amount, description, pin } = req.body;
 
-    if (!accountType || !amount) {
-      return res.status(400).json({ message: 'accountType and amount are required' });
+    if (!accountType || !amount || !pin) {
+      return res.status(400).json({ message: 'accountType, amount and pin are required' });
     }
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -213,6 +222,9 @@ router.post('/withdraw', async (req, res) => {
 
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const isValidPin = await bcrypt.compare(pin, user.pin);
+    if (!isValidPin) return res.status(400).json({ message: 'Invalid PIN' });
 
     const account = user.accounts.find(a => a.type === accountType);
     if (!account) {
@@ -224,6 +236,7 @@ router.post('/withdraw', async (req, res) => {
 
     // Update balance
     account.balance -= parsedAmount;
+    user.markModified('accounts');
     await user.save();
 
     // Create transaction record

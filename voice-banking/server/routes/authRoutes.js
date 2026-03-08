@@ -5,95 +5,160 @@ const User = require('../models/User');
 const OTP = require('../models/OTP');
 const { sendOTP } = require('../services/otpService');
 const { generateUserAccounts } = require('../services/accountService');
-const { cosineSimilarity } = require('../services/voiceService');
+const { generateEmbedding, cosineSimilarity } = require('../services/voiceService');
 const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// ─── Token Helpers ────────────────────────────────────────────
+// ─── Token Helper ─────────────────────────────────────────────
 const generateAccessToken = (user) =>
-  jwt.sign({ id: user._id, phone: user.phone }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' });
+  jwt.sign({ id: user._id, phone: user.phone }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '5m' });
 
-const generateRefreshToken = (user) =>
-  jwt.sign({ id: user._id, phone: user.phone }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '7d' });
-
-const setRefreshCookie = (res, token) => {
-  res.cookie('refreshToken', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
-};
-
-const issueTokens = async (user, res) => {
+const issueTokens = (user) => {
   const accessToken = generateAccessToken(user);
-  const refreshToken = generateRefreshToken(user);
-  user.refreshToken = refreshToken;
-  await user.save();
-  setRefreshCookie(res, refreshToken);
   return accessToken;
 };
 
 // ─── POST /api/auth/send-otp ──────────────────────────────────
 router.post('/send-otp', async (req, res) => {
   try {
-    const { phone } = req.body;
-    if (!phone || !/^[0-9]{10}$/.test(phone)) {
-      return res.status(400).json({ success: false, error: 'Valid 10-digit phone number required' });
+    const { identifier } = req.body;
+    if (!identifier) {
+      return res.status(400).json({ success: false, error: 'Phone number or username required' });
     }
+
+    // Determine if it's a phone number or username
+    let query = {};
+    let isPhone = false;
+    if (/^[0-9]{10}$/.test(identifier)) {
+      query.phone = identifier;
+      isPhone = true;
+    } else {
+      query.username = identifier.toLowerCase();
+    }
+
+    const user = await User.findOne(query);
+    if (!user && !isPhone) {
+      // If registering new, we MUST require a phone number for OTP.
+      // So if identifier is a username and user doesn't exist, we can't send OTP.
+      return res.status(400).json({ success: false, error: 'User not found. Please register with a phone number first.' });
+    }
+
+    // If user exists, send OTP to their registered phone number
+    const targetPhone = user ? user.phone : identifier;
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const hashedOTP = await bcrypt.hash(otp, 10);
 
-    await OTP.deleteMany({ phone });
-    await OTP.create({ phone, otp: hashedOTP });
-    await sendOTP(phone, otp);
+    await OTP.deleteMany({ phone: targetPhone });
+    await OTP.create({ phone: targetPhone, otp: hashedOTP });
+    await sendOTP(targetPhone, otp);
 
-    res.json({ success: true, message: 'OTP sent successfully' });
+    res.json({ success: true, message: 'OTP sent successfully', phone: targetPhone });
   } catch (error) {
     console.error('Send OTP error:', error);
     res.status(500).json({ success: false, error: 'Failed to send OTP' });
   }
 });
 
-// ─── POST /api/auth/register ──────────────────────────────────
-// Creates user + sends OTP automatically
+// ─── POST /api/auth/check-username ─────────────────────────────
+router.post('/check-username', async (req, res) => {
+  try {
+    const { username, phone } = req.body;
+    if (!username || !/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+      return res.status(400).json({ success: false, error: 'Username must be 3-20 characters (letters, numbers, underscore)' });
+    }
+    if (phone && !/^[0-9]{10}$/.test(phone)) {
+      return res.status(400).json({ success: false, error: 'Valid 10-digit phone number required' });
+    }
+    const query = [{ username: username.toLowerCase() }];
+    if (phone) query.push({ phone });
+
+    const existing = await User.findOne({ $or: query });
+    if (existing) {
+      if (existing.username === username.toLowerCase()) {
+        return res.json({ success: true, available: false, error: 'Username already taken' });
+      } else {
+        return res.json({ success: true, available: false, error: 'Phone number already registered' });
+      }
+    }
+    res.json({ success: true, available: true });
+  } catch (error) {
+    console.error('Check username error:', error);
+    res.status(500).json({ success: false, error: 'Failed to check username' });
+  }
+});
+
+// ─── POST /api/auth/register ────────────────────────────────────
+// Creates user (OTP already verified by this point)
 router.post('/register', async (req, res) => {
   try {
-    const { name, age, phone, language } = req.body;
+    const { username, name, age, phone, language, accountType, pin, voicePassphrase } = req.body;
 
-    if (!name || !age || !phone) {
-      return res.status(400).json({ success: false, error: 'Name, age and phone are required' });
+    if (!username || !name || !age || !phone) {
+      return res.status(400).json({ success: false, error: 'Username, name, age and phone are required' });
+    }
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+      return res.status(400).json({ success: false, error: 'Username must be 3-20 characters (letters, numbers, underscore)' });
     }
     if (!/^[0-9]{10}$/.test(phone)) {
       return res.status(400).json({ success: false, error: 'Valid 10-digit phone number required' });
     }
+    if (!pin || !/^[0-9]{4}$/.test(pin)) {
+      return res.status(400).json({ success: false, error: 'A valid 4-digit PIN is required' });
+    }
 
-    const existingUser = await User.findOne({ phone });
+    const validAccountTypes = ['savings', 'current', 'pension'];
+    const selectedType = validAccountTypes.includes(accountType) ? accountType : 'savings';
+
+    const existingUser = await User.findOne({ $or: [{ phone }, { username: username.toLowerCase() }] });
     if (existingUser) {
+      if (existingUser.username === username.toLowerCase()) {
+        return res.status(400).json({ success: false, error: 'Username already taken' });
+      }
       return res.status(400).json({ success: false, error: 'Phone number already registered' });
     }
 
-    // Auto-generate unique account numbers
-    const accounts = await generateUserAccounts();
+    // Hash PIN
+    const hashedPin = await bcrypt.hash(pin, 10);
+
+    // Auto-generate unique account number for selected type
+    const accounts = await generateUserAccounts(selectedType);
+
+    let voiceprint = [];
+    if (voicePassphrase && voicePassphrase.trim().length >= 3) {
+      const embedding = await generateEmbedding(voicePassphrase.trim());
+      if (embedding) {
+        voiceprint = embedding;
+      }
+    }
 
     const user = await User.create({
+      username: username.toLowerCase(),
       name,
       age: parseInt(age),
       phone,
       language: language || 'en',
+      pin: hashedPin,
+      voiceprint,
       accounts,
     });
 
-    // Auto-send OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const hashedOTP = await bcrypt.hash(otp, 10);
-    await OTP.deleteMany({ phone });
-    await OTP.create({ phone, otp: hashedOTP });
-    await sendOTP(phone, otp);
+    // Issue token so user is logged in immediately
+    const accessToken = issueTokens(user);
 
-    res.status(201).json({ success: true, message: 'Account created. OTP sent to your phone.' });
+    res.status(201).json({
+      success: true,
+      accessToken,
+      user: {
+        id: user._id,
+        username: user.username,
+        name: user.name,
+        phone: user.phone,
+        language: user.language,
+        accounts: user.accounts,
+      }
+    });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ success: false, error: 'Registration failed' });
@@ -101,7 +166,8 @@ router.post('/register', async (req, res) => {
 });
 
 // ─── POST /api/auth/verify-otp ────────────────────────────────
-// Returns JWT so frontend can call set-pin next
+// If user exists → returns JWT (login flow)
+// If user doesn't exist yet → returns success only (registration flow)
 router.post('/verify-otp', async (req, res) => {
   try {
     const { phone, otp } = req.body;
@@ -122,15 +188,18 @@ router.post('/verify-otp', async (req, res) => {
     await OTP.deleteMany({ phone });
 
     const user = await User.findOne({ phone });
+
+    // Registration flow — user doesn't exist yet, just confirm OTP is valid
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      return res.json({ success: true, message: 'OTP verified' });
     }
 
-    // Reset lock if any
+    // Login flow — user exists, issue token
     user.failedPinAttempts = 0;
     user.isLocked = false;
+    await user.save();
 
-    const accessToken = await issueTokens(user, res);
+    const accessToken = issueTokens(user);
 
     res.json({
       success: true,
@@ -179,16 +248,21 @@ router.post('/set-pin', verifyToken, async (req, res) => {
 // ─── POST /api/auth/enroll-voice (JWT required) ───────────────
 router.post('/enroll-voice', verifyToken, async (req, res) => {
   try {
-    const { voiceVector } = req.body;
+    const { voicePassphrase } = req.body;
 
-    if (!voiceVector || !Array.isArray(voiceVector) || voiceVector.length !== 256) {
-      return res.status(400).json({ success: false, error: 'Valid 256-float voice vector required' });
+    if (!voicePassphrase || typeof voicePassphrase !== 'string' || voicePassphrase.trim().length < 3) {
+      return res.status(400).json({ success: false, error: 'Valid voice passphrase required' });
     }
 
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-    user.voiceprint = voiceVector;
+    const embedding = await generateEmbedding(voicePassphrase.trim());
+    if (!embedding) {
+      return res.status(500).json({ success: false, error: 'Failed to generate voice embedding' });
+    }
+
+    user.voiceprint = embedding;
     await user.save();
 
     res.json({ success: true, message: 'Voice enrolled successfully' });
@@ -201,22 +275,30 @@ router.post('/enroll-voice', verifyToken, async (req, res) => {
 // ─── POST /api/auth/login/otp ─────────────────────────────────
 router.post('/login/otp', async (req, res) => {
   try {
-    const { phone, otp } = req.body;
-    const user = await User.findOne({ phone });
+    const { identifier, otp } = req.body;
+
+    let query = {};
+    if (/^[0-9]{10}$/.test(identifier)) {
+      query.phone = identifier;
+    } else {
+      query.username = identifier.toLowerCase();
+    }
+
+    const user = await User.findOne(query);
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
     if (user.isLocked) return res.status(423).json({ success: false, error: 'Account locked. Reset via OTP.' });
 
-    const otpRecord = await OTP.findOne({ phone }).sort({ createdAt: -1 });
+    const otpRecord = await OTP.findOne({ phone: user.phone }).sort({ createdAt: -1 });
     if (!otpRecord) return res.status(400).json({ success: false, error: 'OTP expired or not found' });
 
     const isValid = await bcrypt.compare(otp, otpRecord.otp);
     if (!isValid) return res.status(400).json({ success: false, error: 'Invalid OTP' });
 
-    await OTP.deleteMany({ phone });
+    await OTP.deleteMany({ phone: user.phone });
     user.failedPinAttempts = 0;
     user.isLocked = false;
 
-    const accessToken = await issueTokens(user, res);
+    const accessToken = issueTokens(user);
     res.json({
       success: true,
       accessToken,
@@ -231,8 +313,16 @@ router.post('/login/otp', async (req, res) => {
 // ─── POST /api/auth/login/pin ─────────────────────────────────
 router.post('/login/pin', async (req, res) => {
   try {
-    const { phone, pin } = req.body;
-    const user = await User.findOne({ phone });
+    const { identifier, pin } = req.body;
+
+    let query = {};
+    if (/^[0-9]{10}$/.test(identifier)) {
+      query.phone = identifier;
+    } else {
+      query.username = identifier.toLowerCase();
+    }
+
+    const user = await User.findOne(query);
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
     if (user.isLocked) return res.status(423).json({ success: false, error: 'Account locked. Reset via OTP.' });
     if (!user.pin) return res.status(400).json({ success: false, error: 'PIN not set. Please register again.' });
@@ -250,7 +340,7 @@ router.post('/login/pin', async (req, res) => {
     }
 
     user.failedPinAttempts = 0;
-    const accessToken = await issueTokens(user, res);
+    const accessToken = issueTokens(user);
     res.json({
       success: true,
       accessToken,
@@ -265,27 +355,39 @@ router.post('/login/pin', async (req, res) => {
 // ─── POST /api/auth/login/voice ───────────────────────────────
 router.post('/login/voice', async (req, res) => {
   try {
-    const { phone, voiceVector } = req.body; // ✅ vector, text nahi
+    const { identifier, voicePassphrase } = req.body;
 
-    if (!phone || !voiceVector || !Array.isArray(voiceVector) || voiceVector.length !== 256) {
-      return res.status(400).json({ success: false, error: 'Phone and valid voice vector required' });
+    if (!identifier || !voicePassphrase || typeof voicePassphrase !== 'string' || voicePassphrase.trim().length < 3) {
+      return res.status(400).json({ success: false, error: 'Identifier and valid voice passphrase required' });
     }
 
-    const user = await User.findOne({ phone });
+    let query = {};
+    if (/^[0-9]{10}$/.test(identifier)) {
+      query.phone = identifier;
+    } else {
+      query.username = identifier.toLowerCase();
+    }
+
+    const user = await User.findOne(query);
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
     if (user.isLocked) return res.status(423).json({ success: false, error: 'Account locked. Reset via OTP.' });
     if (!user.voiceprint || user.voiceprint.length === 0) {
       return res.status(400).json({ success: false, error: 'Voice login not set up. Please use PIN.' });
     }
 
+    const voiceVector = await generateEmbedding(voicePassphrase.trim());
+    if (!voiceVector) {
+      return res.status(500).json({ success: false, error: 'Failed to generate voice embedding' });
+    }
+
     // Cosine similarity check
     const similarity = cosineSimilarity(voiceVector, user.voiceprint);
-    if (similarity < 0.85) {
+    if (similarity < 0.80) {
       return res.status(401).json({ success: false, error: 'Voice not recognized. Please try again or use PIN.' });
     }
 
     user.failedPinAttempts = 0;
-    const accessToken = await issueTokens(user, res);
+    const accessToken = issueTokens(user);
     res.json({
       success: true,
       accessToken,
@@ -297,47 +399,8 @@ router.post('/login/voice', async (req, res) => {
   }
 });
 
-// ─── POST /api/auth/refresh ───────────────────────────────────
-router.post('/refresh', async (req, res) => {
-  try {
-    const token = req.cookies.refreshToken;
-    if (!token) return res.status(401).json({ success: false, error: 'Refresh token required' });
-
-    const decoded = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
-    const user = await User.findById(decoded.id);
-
-    if (!user || user.refreshToken !== token) {
-      return res.status(403).json({ success: false, error: 'Invalid refresh token' });
-    }
-
-    const accessToken = await issueTokens(user, res);
-    res.json({
-      success: true,
-      accessToken,
-      data: { id: user._id, name: user.name, phone: user.phone, language: user.language, accounts: user.accounts }
-    });
-  } catch (error) {
-    console.error('Refresh error:', error);
-    res.status(403).json({ success: false, error: 'Invalid or expired refresh token' });
-  }
-});
-
 // ─── POST /api/auth/logout ────────────────────────────────────
 router.post('/logout', async (req, res) => {
-  try {
-    const token = req.cookies.refreshToken;
-    if (token) {
-      const decoded = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
-      const user = await User.findById(decoded.id);
-      if (user) {
-        user.refreshToken = null;
-        await user.save();
-      }
-    }
-  } catch (_) {
-    // token already expired — still logout
-  }
-  res.clearCookie('refreshToken');
   res.json({ success: true, message: 'Logged out successfully' });
 });
 

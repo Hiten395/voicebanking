@@ -1,17 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
-import { IoVolumeHighOutline } from 'react-icons/io5';
+import { IoVolumeHighOutline, IoSwapHorizontalOutline, IoPlayOutline, IoPauseOutline } from 'react-icons/io5';
 import './VoiceQuery.css';
 
 const VoiceQuery = () => {
   const { t } = useLanguage();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [micState, setMicState] = useState('idle'); // idle | recording | processing
   const [transcript, setTranscript] = useState('');
   const [response, setResponse] = useState(null);
   const [error, setError] = useState('');
+  const [playbackState, setPlaybackState] = useState('idle'); // idle | playing | paused
   const recognitionRef = useRef(null);
 
   const suggestedChips = [
@@ -28,13 +31,42 @@ const VoiceQuery = () => {
       utterance.lang = 'en-IN';
       utterance.rate = 0.9;
       utterance.pitch = 1;
+
+      utterance.onstart = () => setPlaybackState('playing');
+      utterance.onpause = () => setPlaybackState('paused');
+      utterance.onresume = () => setPlaybackState('playing');
+      utterance.onend = () => setPlaybackState('idle');
+      utterance.onerror = () => setPlaybackState('idle');
+
       window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const togglePlayback = () => {
+    if (!('speechSynthesis' in window)) return;
+
+    if (playbackState === 'playing') {
+      window.speechSynthesis.pause();
+      setPlaybackState('paused');
+    } else if (playbackState === 'paused') {
+      window.speechSynthesis.resume();
+      setPlaybackState('playing');
+    } else {
+      if (response && response.response) {
+        speakResponse(response.response);
+      }
     }
   };
 
   const handleQuery = async (text) => {
     setMicState('processing');
     setError('');
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setPlaybackState('idle');
+    }
+
     try {
       const res = await api.post('/voice/query', { text });
       setResponse(res.data);
@@ -178,13 +210,29 @@ const VoiceQuery = () => {
       {response && (
         <div className="response-card animate-slide-up" role="region" aria-label="AI response">
           <p className="response-text">{response.response}</p>
-          <button
-            className="btn btn-secondary replay-btn"
-            onClick={() => speakResponse(response.response)}
-            aria-label="Replay response"
-          >
-            <IoVolumeHighOutline size={18} /> {t('replay')}
-          </button>
+          <div className="response-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <button
+              className="btn btn-secondary replay-btn"
+              onClick={togglePlayback}
+              aria-label={playbackState === 'playing' ? "Pause response" : "Play response"}
+            >
+              {playbackState === 'playing' ? (
+                <><IoPauseOutline size={18} /> {t('pause') || 'Pause'}</>
+              ) : playbackState === 'paused' ? (
+                <><IoPlayOutline size={18} /> {t('resume') || 'Resume'}</>
+              ) : (
+                <><IoVolumeHighOutline size={18} /> {t('replay') || 'Replay'}</>
+              )}
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => navigate('/transfer')}
+              aria-label="Make a transaction"
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            >
+              <IoSwapHorizontalOutline size={18} /> {t('transfer') || 'Make Transaction'}
+            </button>
+          </div>
         </div>
       )}
     </div>
