@@ -226,7 +226,8 @@ const RegisterStepper = () => {
         pin: finalPin,
         voicePassphrase: voicePassphrase.trim(),
       });
-      login(res.data);
+      login({accessToken: res.data.accessToken,
+  user: res.data.user});
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
@@ -247,7 +248,8 @@ const RegisterStepper = () => {
         accountType,
         pin: finalPin,
       });
-      login(res.data);
+      login({accessToken: res.data.accessToken,
+  user: res.data.user});
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
